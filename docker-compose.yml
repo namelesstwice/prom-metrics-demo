@@ -1,0 +1,66 @@
+version: "3.9"
+services:
+  web:
+    build: ./sample-loopback-app
+    image: sample-loopback-app
+    ports:
+      - "8080:3000"
+
+  mongo1:
+    image: mongo:4.2
+    container_name: mongo1
+    command: ["--replSet", "my-replica-set", "--bind_ip_all", "--port", "30001"]
+    ports:
+      - 30001:30001
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'my-replica-set',members:[{_id:0,host:\"mongo1:30001\"},{_id:1,host:\"mongo2:30002\"},{_id:2,host:\"mongo3:30003\"}]}).ok || rs.status().ok" | mongo --port 30001 --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+
+  mongo2:
+    image: mongo:4.2
+    container_name: mongo2
+    command: ["--replSet", "my-replica-set", "--bind_ip_all", "--port", "30002"]
+    ports:
+      - 30002:30002
+
+  mongo3:
+    image: mongo:4.2
+    container_name: mongo3
+    command: ["--replSet", "my-replica-set", "--bind_ip_all", "--port", "30003"]
+    ports:
+      - 30003:30003
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports: 
+      - 9090:9090
+
+  mongo-exporter:
+    image: bitnami/mongodb-exporter
+    container_name: mongo-exporter
+    command: ["--mongodb.uri", "mongodb://mongo1:30001"]
+    ports: 
+      - 9216:9216
+    depends_on:
+      - "mongo1"
+      - "mongo2"
+      - "mongo3"
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter
+    container_name: node-exporter
+    ports:
+      - 9100:9100
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+    ports:
+      - 3000:3000
+
